@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Multimedia chat!</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://code.jquery.com/jquery-3.4.1.min.js"
+        integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
+</head>
+
+<body>
+    <input type='text' placeholder="Message" id='inp' />
+    <button onclick="sendMsg()">Send</button>
+    
+    <p id="indicator"></p>
+    <ul id='messages'></ul>
+
+    <script>
+
+        // event handlers here
+        function handleChat(data) {
+            $('#messages').append(`
+                <li>
+                    User: ${data.name}
+                    <br />
+                    Message: ${data.text}
+                </li>
+            `);
+        }
+
+        function handleJoinUser(name) {
+            $('#messages').append(`
+                <li>User joined: ${name}</li>
+            `);
+        }
+
+        function handleLeaveUser(name) {
+            handleStopType(name);
+            $('#messages').append(`
+                <li>User left: ${name}</li>
+            `);
+        }
+
+        function getName() {
+            return prompt('Please enter your name.');
+        }
+
+        function sendMsg() {
+            const text = $('#inp').val();
+            socket.emit('chat', { name, text });
+        }
+
+        let socket;
+        let name = '';
+        let typingTimeout = null;
+        let isStartTypeSent = false;
+        let typingUsers = new Set();
+
+        $('#inp').on('input', emitStartType);
+        $('#inp').on('blur', emitStopType);
+
+        $(document).ready(() => {
+            socket = io();
+            socket.on('connect', () => {
+                name = getName();
+                socket.emit('join', name)
+            });
+
+            socket.on('join', handleJoinUser);
+            socket.on('chat', handleChat);
+            socket.on('leave', handleLeaveUser);
+            socket.on('start-type', handleStartType);
+            socket.on('stop-type', handleStopType);
+        });
+
+        function emitStartType() {
+           clearTimeout(typingTimeout);
+           typingTimeout = setTimeout(emitStopType, 2000);
+           if (isStartTypeSent) return;
+           socket.emit('start-type', name, () => {
+              isStartTypeSent = true;
+           });
+        }
+
+        function emitStopType() {
+           socket.emit('stop-type', name, () => {
+              isStartTypeSent = false;
+           });
+        }
+
+        function handleStartType(name) {
+            typingUsers.add(name);
+            let displayString = '';
+            for (const user of Array.from(typingUsers)) {
+                displayString += `${user}, `;
+            }
+            displayString = displayString.substr(0, displayString.length - 2)
+            displayString += ' typing...'
+
+            $('#indicator').text(displayString);
+        }
+
+        function handleStopType(name) {
+            typingUsers.delete(name)
+            let displayString = ''
+            for (const user of Array.from(typingUsers)) {
+                displayString += `${user}, `;
+            }
+            displayString = displayString.substr(0, displayString.length - 2)
+            displayString += displayString.length > 0 ? ' typing...' : ''
+
+            $('#indicator').text(displayString)
+        }
+        
+    </script>
+</body>
+
+</html>
